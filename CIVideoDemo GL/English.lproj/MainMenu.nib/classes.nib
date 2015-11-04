@@ -18,6 +18,7 @@
         }, 
         {
             ACTIONS = {
+                exportMovie = id; 
                 nextFrame = id; 
                 prevFrame = id; 
                 safeFrameToFile = id; 

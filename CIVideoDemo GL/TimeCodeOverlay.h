@@ -1,12 +1,12 @@
 /*
 
-File: VideoView.h
+File: TimeCodeOverlay.h
 
-Abstract:   NSOpenGLView subclass that handles the rendering off the movie.
+Abstract:   Helper class to render QTTime into a CIImage.
 
 Version: 1.0
 
-© Copyright 2005 Apple Computer, Inc. All rights reserved.
+Â© Copyright 2005 Apple Computer, Inc. All rights reserved.
 
 IMPORTANT:  This Apple software is supplied to 
 you by Apple Computer, Inc. ("Apple") in 
@@ -65,69 +65,23 @@ SUCH DAMAGE.
 
 */ 
 
-
-
 #import <Cocoa/Cocoa.h>
 #import <QTKit/QTKit.h>
 #import <QuartzCore/QuartzCore.h>
-#import "TimeCodeOverlay.h"
 
-@interface VideoView : NSOpenGLView
+
+@interface TimeCodeOverlay : NSObject 
 {
-    // view related
-    NSRecursiveLock			*lock;			    // thread lock to protect the OpenGL rendering from multiple threads
-    BOOL				needsReshape;		    // when the view changes its size, set the flag to update the OpenGL context
-    id					delegate;
-
-    // movie and visual context
-    QTMovie				*qtMovie;		    // the movie in its QTKit representation
-    QTTime				movieDuration;		    // cached duration of the movie - just for convenience
-    QTVisualContextRef			qtVisualContext;	    // the context the movie is playing in
-    CVImageBufferRef			currentFrame;		    // the current frame from the movie
-    
-    // display link
-    CVDisplayLinkRef			displayLink;		    // the displayLink that runs the show
-    CGDirectDisplayID			viewDisplayID;
-
-    // filters for CI rendering
-    CIFilter				*colorCorrectionFilter;	    // hue saturation brightness control through one CI filter
-    CIFilter				*effectFilter;		    // zoom blur filter
-    CIFilter				*compositeFilter;	    // composites the timecode over the video
-    CIContext				*ciContext;
-    
-    // timecode overlay
-    TimeCodeOverlay			*timeCodeOverlay;    
-    
-    // for movie export
-    BOOL				isExporting;
-    BOOL				cancelExport;
-    char				*contextPixels;		    // readback buffer for the compression
-    char				*flippedContextPixels;	    // another buffer to flip the pixels as we read from the screen
-    UInt32				contextRowBytes;
-    int					outputWidth;
-    int					outputHeight;
-    int					outputAlignment;
-    ImageDescriptionHandle		outputImageDescription;	    // describes our compression
+    NSGraphicsContext	    *graphicsContext;
+    CGContextRef	    bitmapContext;
+    void*		    bitmapData;
+    CGImageRef		    bitmapImage;
+    NSSize		    targetSize;
+    NSDictionary	    *fontAttributes;
 }
 
-- (void)setQTMovie:(QTMovie*)inMovie;
+- (id)initWithAttributes:(NSDictionary*)inFontAttributes targetSize:(NSSize)inTargetSize;
 
-- (IBAction)setMovieTime:(id)sender;
-- (IBAction)nextFrame:(id)sender;
-- (IBAction)prevFrame:(id)sender;
-- (IBAction)scrub:(id)sender;
-- (IBAction)togglePlay:(id)sender;
-- (IBAction)setFilterParameter:(id)sender;
-- (IBAction)safeFrameToFile:(id)sender;
-- (IBAction)exportMovie:(id)sender;
-
-- (void)setFilterCenterFromMouseLocation:(NSPoint)where;
-
-- (void)updateCurrentFrame;
-- (void)renderCurrentFrame;
-
-- (QTTime)movieDuration;
-- (QTTime)currentTime;
-- (void)setTime:(QTTime)inTime;
+- (CIImage*)getImageForTime:(QTTime)inTime;
 
 @end

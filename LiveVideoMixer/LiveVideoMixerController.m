@@ -1,3 +1,72 @@
+/*
+
+File: LiveVideoMixerController.m
+
+Abstract:   This is the application controller object.
+	    It also functions as the document as it holds
+	    the video channels.
+
+Version: 1.0
+
+å© Copyright 2005 Apple Computer, Inc. All rights reserved.
+
+IMPORTANT:  This Apple software is supplied to 
+you by Apple Computer, Inc. ("Apple") in 
+consideration of your agreement to the following 
+terms, and your use, installation, modification 
+or redistribution of this Apple software 
+constitutes acceptance of these terms.  If you do 
+not agree with these terms, please do not use, 
+install, modify or redistribute this Apple 
+software.
+
+In consideration of your agreement to abide by 
+the following terms, and subject to these terms, 
+Apple grants you a personal, non-exclusive 
+license, under Apple's copyrights in this 
+original Apple software (the "Apple Software"), 
+to use, reproduce, modify and redistribute the 
+Apple Software, with or without modifications, in 
+source and/or binary forms; provided that if you 
+redistribute the Apple Software in its entirety 
+and without modifications, you must retain this 
+notice and the following text and disclaimers in 
+all such redistributions of the Apple Software. 
+Neither the name, trademarks, service marks or 
+logos of Apple Computer, Inc. may be used to 
+endorse or promote products derived from the 
+Apple Software without specific prior written 
+permission from Apple.  Except as expressly 
+stated in this notice, no other rights or 
+licenses, express or implied, are granted by 
+Apple herein, including but not limited to any 
+patent rights that may be infringed by your 
+derivative works or by other works in which the 
+Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an "AS 
+IS" basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR 
+IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED 
+WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY 
+AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING 
+THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE 
+OR IN COMBINATION WITH YOUR PRODUCTS.
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY 
+SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL 
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, 
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS 
+OF USE, DATA, OR PROFITS; OR BUSINESS 
+INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, 
+REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF 
+THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER 
+UNDER THEORY OF CONTRACT, TORT (INCLUDING 
+NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN 
+IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF 
+SUCH DAMAGE.
+
+*/ 
+
 #import "LiveVideoMixerController.h"
 
 #import <CoreGraphics/CGDirectDisplay.h>
@@ -5,7 +74,6 @@
 #import <OpenGL/glext.h>
 #import <QTKit/QTKit.h>
 
-#import "VideoChannel.h"
 
 GLuint				gTexNames[kNumTextures];
 
@@ -72,6 +140,8 @@ GLuint				gTexNames[kNumTextures];
     [self _loadTextureFromFile:[[NSBundle mainBundle] pathForResource:@"SpeechBubble" ofType:@"tif"] intoTextureName:gTexNames[kSpeechBubbleTextureID] pixelFormat:GL_BGRA]; 
     [mainView unlock];
 
+    masterTimeBase = NULL;
+    useMasterTimeBase = NO;	// run all movies off one master time base for synchronization
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -108,6 +178,9 @@ GLuint				gTexNames[kNumTextures];
     NSArray     *fileTypes = [QTMovie movieFileTypes:QTIncludeCommonTypes];
     NSOpenPanel *theOpenPanel = [NSOpenPanel openPanel];
 
+    // stop current playback
+    if(isPlaying)
+	[self togglePlayback:nil];
 
     [theOpenPanel setAllowsMultipleSelection:NO];
 
@@ -126,6 +199,7 @@ GLuint				gTexNames[kNumTextures];
 			[theVideoChannel setValue:[NSNumber numberWithFloat:100.0] forKey:@"channelOpacity"];
 			[channelController0 addObject:theVideoChannel];
 			[positionSwitch0 setEnabled:YES]; 
+			masterTimeBase = [theVideoChannel timeBase];	// always use channel 0 for master timebase
 			break;
 		case 1:
 			[channelController1 addObject:theVideoChannel];
@@ -137,6 +211,7 @@ GLuint				gTexNames[kNumTextures];
 			break;
 		
 	}
+
     }
 }
 
@@ -170,16 +245,29 @@ GLuint				gTexNames[kNumTextures];
 	[qtHousekeepingTimer invalidate];
 	[qtHousekeepingTimer release];
 	qtHousekeepingTimer = nil;
+
 	[[channelController0 content] stopMovie];
 	[[channelController1 content] stopMovie];
 	[[channelController2 content] stopMovie];
+
     } else {
+	Fixed rate = X2Fix(1.0);
+
+	[[channelController0 content] prerollMovie:rate];
+	[[channelController1 content] prerollMovie:rate];
+	[[channelController2 content] prerollMovie:rate];
+
 	if(CVDisplayLinkStart(displayLink) == kCVReturnSuccess)
 	{
+	    TimeBase mtb = useMasterTimeBase ? masterTimeBase : NULL;
 	    isPlaying = YES;
-	    [[channelController0 content] startMovie];
-	    [[channelController1 content] startMovie];
-	    [[channelController2 content] startMovie];
+		
+	    [[channelController2 content] startMovie:rate usingMasterTimeBase:mtb];
+	    [[channelController1 content] startMovie:rate usingMasterTimeBase:mtb];
+	    [[channelController0 content] startMovie:rate usingMasterTimeBase:mtb];
+    
+	    MoviesTask(NULL, 0);
+
 	    qtHousekeepingTimer = [[NSTimer scheduledTimerWithTimeInterval:0.015	    // 60fps
 			target:self 
 			selector:@selector(_qtHousekeeping) 
